@@ -51,9 +51,9 @@ class AuctionController extends Controller
     // 3. Read Single (Publik): Menampilkan detail satu lelang beserta riwayat bid
     public function show($id)
     {
-        // Memuat data lelang beserta nama pembuatnya dan daftar penawar (beserta nama penawar)
-        $auction = Auction::with(['user:id,name', 'bids.user:id,name'])
-                          ->findOrFail($id);
+        $auction = Auction::with(['bids.user' => function($query) {
+            $query->orderBy('created_at', 'desc');
+        }])->findOrFail($id);
 
         return response()->json($auction);
     }
