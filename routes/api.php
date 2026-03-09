@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\AuctionController; // Tambahkan import ini
+use App\Http\Controllers\AuctionController;
 
 // --- Endpoint Autentikasi ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -25,4 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auctions', [AuctionController::class, 'store']);
     Route::put('/auctions/{id}', [AuctionController::class, 'update']);
     Route::delete('/auctions/{id}', [AuctionController::class, 'destroy']);
+
+    // Transaksi Bidding
+    Route::post('/auctions/{id}/bids', [\App\Http\Controllers\BidController::class, 'store']);
 });
