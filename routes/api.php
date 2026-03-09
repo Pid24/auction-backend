@@ -33,4 +33,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Transaksi Bidding
     Route::post('/auctions/{id}/bids', [BidController::class, 'store']);
+
+    Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'index']);
 });
