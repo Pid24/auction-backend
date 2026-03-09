@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Auction;
 use App\Models\Bid;
 use App\Events\BidPlaced;
+use App\Events\Outbid;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -37,6 +38,9 @@ class BidController extends Controller
                     abort(400, 'Nominal bid harus lebih besar dari harga saat ini (' . $auction->current_price . ').');
                 }
 
+                // Identifikasi penawar tertinggi sebelumnya (SEBELUM bid baru disimpan)
+                $previousHighestBid = $auction->bids()->orderBy('bid_amount', 'desc')->first();
+
                 // Simpan Bid
                 $bid = Bid::create([
                     'auction_id' => $auction->id,
@@ -49,10 +53,28 @@ class BidController extends Controller
                     'current_price' => $request->bid_amount,
                 ]);
 
-                return ['bid' => $bid, 'auction' => $auction];
+                return [
+                    'bid' => $bid,
+                    'auction' => $auction,
+                    'previousHighestBid' => $previousHighestBid
+                ];
             });
 
-            // Trigger WebSocket Event setelah transaksi database sukses
+            // Trigger WebSocket Event 1: Notifikasi Outbid (Private Channel)
+            $previousHighestBid = $result['previousHighestBid'];
+            if ($previousHighestBid && $previousHighestBid->user_id !== $request->user()->id) {
+                broadcast(new Outbid(
+                    $previousHighestBid->user_id,
+                    $result['auction']->id,
+                    $result['auction']->title,
+                    $request->bid_amount
+                ));
+            }
+
+            // Memuat relasi user agar object yang dikirim ke frontend memiliki nama penawar
+            $result['bid']->load('user');
+
+            // Trigger WebSocket Event 2: Update UI Room (Public Channel)
             broadcast(new BidPlaced($result['bid'], $result['auction']))->toOthers();
 
             return response()->json([

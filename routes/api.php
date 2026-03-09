@@ -2,8 +2,13 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuctionController;
+use App\Http\Controllers\BidController;
+
+// Paksa rute broadcasting untuk menggunakan prefix /api dan middleware sanctum
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 // --- Endpoint Autentikasi ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -27,5 +32,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/auctions/{id}', [AuctionController::class, 'destroy']);
 
     // Transaksi Bidding
-    Route::post('/auctions/{id}/bids', [\App\Http\Controllers\BidController::class, 'store']);
+    Route::post('/auctions/{id}/bids', [BidController::class, 'store']);
 });
