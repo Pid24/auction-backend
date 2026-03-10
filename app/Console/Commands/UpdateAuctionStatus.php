@@ -13,18 +13,37 @@ class UpdateAuctionStatus extends Command
 
     public function handle()
     {
-        $now = Carbon::now();
+        $now = \Carbon\Carbon::now();
 
         // Eksekusi Pending -> Active
-        $activated = Auction::where('status', 'pending')
+        $activated = \App\Models\Auction::where('status', 'pending')
             ->where('start_time', '<=', $now)
             ->update(['status' => 'active']);
 
-        // Eksekusi Active -> Closed
-        $closed = Auction::where('status', 'active')
+        // Eksekusi Active -> Closed (Iterasi untuk mencari pemenang)
+        $closingAuctions = \App\Models\Auction::where('status', 'active')
             ->where('end_time', '<=', $now)
-            ->update(['status' => 'closed']);
+            ->get();
 
-        $this->info("Task Executed: {$activated} activated, {$closed} closed.");
+        $closedCount = 0;
+        foreach ($closingAuctions as $auction) {
+            $auction->update(['status' => 'closed']);
+            $closedCount++;
+
+            // Cari penawar tertinggi di lelang yang baru saja ditutup
+            $winningBid = $auction->bids()->orderBy('bid_amount', 'desc')->first();
+
+            if ($winningBid) {
+                // Tembakkan notifikasi privat ke pemenang
+                broadcast(new \App\Events\AuctionWon(
+                    $winningBid->user_id,
+                    $auction->id,
+                    $auction->title,
+                    $winningBid->bid_amount
+                ));
+            }
+        }
+
+        $this->info("Task Executed: {$activated} activated, {$closedCount} closed.");
     }
 }

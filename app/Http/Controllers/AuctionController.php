@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Auction;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class AuctionController extends Controller
 {
@@ -21,11 +22,15 @@ class AuctionController extends Controller
     // 2. Create (Terlindungi): Membuat lelang baru
     public function store(Request $request)
     {
+        // Memundurkan komparasi waktu 'now' sebanyak 60 menit
+        // untuk mengakomodasi perbedaan detik/menit antara frontend dan backend
+        $toleranceTime = Carbon::now()->subMinutes(60)->toDateTimeString();
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
             'starting_price' => 'required|numeric|min:0',
-            'start_time' => 'required|date|after_or_equal:now',
+            'start_time' => 'required|date|after_or_equal:' . $toleranceTime,
             'end_time' => 'required|date|after:start_time',
         ]);
 
@@ -51,9 +56,9 @@ class AuctionController extends Controller
     // 3. Read Single (Publik): Menampilkan detail satu lelang beserta riwayat bid
     public function show($id)
     {
-        $auction = Auction::with(['bids.user' => function($query) {
-            $query->orderBy('created_at', 'desc');
-        }])->findOrFail($id);
+        $auction = Auction::with(['bids' => function($query) {
+            $query->orderBy('bid_amount', 'desc');
+        }, 'bids.user'])->findOrFail($id);
 
         return response()->json($auction);
     }
