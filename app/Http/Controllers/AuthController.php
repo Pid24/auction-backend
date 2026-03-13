@@ -24,6 +24,12 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
+        // Inisialisasi entitas dompet virtual (Escrow) secara mutlak
+        $user->wallet()->create([
+            'balance' => 0,
+            'frozen_balance' => 0,
+        ]);
+
         // Buat token akses untuk pengguna
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -31,7 +37,7 @@ class AuthController extends Controller
             'message' => 'Registrasi berhasil',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user
+            'user' => $user->load('wallet')
         ], 201);
     }
 
@@ -51,23 +57,19 @@ class AuthController extends Controller
             ]);
         }
 
-        // Hapus token lama jika ada (opsional, agar 1 perangkat saja)
-        // $user->tokens()->delete();
-
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'message' => 'Login berhasil',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user
+            'user' => $user->load('wallet')
         ]);
     }
 
     // 3. Logout Pengguna (Menghapus Token)
     public function logout(Request $request)
     {
-        // Hapus token yang sedang digunakan untuk request ini
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
