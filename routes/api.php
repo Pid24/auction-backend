@@ -6,33 +6,56 @@ use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuctionController;
 use App\Http\Controllers\BidController;
+use App\Http\Controllers\ProfileController;
 
 // Paksa rute broadcasting untuk menggunakan prefix /api dan middleware sanctum
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
-// --- Endpoint Autentikasi ---
+// ==========================================
+// 1. ZONA PUBLIK (Tanpa Otorisasi)
+// ==========================================
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-// --- Endpoint Lelang (Publik) ---
 Route::get('/auctions', [AuctionController::class, 'index']);
 Route::get('/auctions/{id}', [AuctionController::class, 'show']);
 
-// --- Endpoint Terlindungi (Wajib Login / Bearer Token) ---
+// ==========================================
+// 2. ZONA TERLINDUNGI (Wajib Bearer Token)
+// ==========================================
 Route::middleware('auth:sanctum')->group(function () {
-    // Auth
+
+    // --- Autentikasi & Profil Global ---
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+    Route::get('/profile', [ProfileController::class, 'index']);
 
-    // Operasi Lelang (Create, Update, Delete)
+    // --- Operasi Standar (Operative) ---
+    // Membuat dan memanipulasi lelang milik sendiri
     Route::post('/auctions', [AuctionController::class, 'store']);
     Route::put('/auctions/{id}', [AuctionController::class, 'update']);
     Route::delete('/auctions/{id}', [AuctionController::class, 'destroy']);
 
-    // Transaksi Bidding
+    // Eksekusi Bidding
     Route::post('/auctions/{id}/bids', [BidController::class, 'store']);
 
-    Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'index']);
+    // ==========================================
+    // 3. ZONA ADMINISTRATOR (Moderasi Sistem)
+    // ==========================================
+    Route::middleware('admin')->prefix('admin')->group(function () {
+
+        // Rute pengujian respons otorisasi Admin
+        Route::get('/status', function () {
+            return response()->json([
+                'message' => 'Otorisasi Administrator Tervalidasi. Akses Sistem Terbuka.'
+            ], 200);
+        });
+
+        // Nanti kita akan tambahkan rute intervensi di sini, contoh:
+        // Route::delete('/auctions/{id}/force', [AdminController::class, 'forceDelete']);
+        // Route::post('/users/{id}/ban', [AdminController::class, 'banUser']);
+    });
+
 });
