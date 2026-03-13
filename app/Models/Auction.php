@@ -23,4 +23,9 @@ class Auction extends Model
     {
         return $this->hasMany(Bid::class);
     }
+
+    public function media()
+    {
+        return $this->hasMany(AuctionMedia::class);
+    }
 }

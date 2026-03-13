@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Auction;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 class AuctionController extends Controller
 {
     // 1. Read All (Publik): Menampilkan daftar lelang
     public function index()
     {
-        // Mengambil lelang yang aktif atau tertunda, diurutkan dari tenggat waktu terdekat
-        $auctions = Auction::whereIn('status', ['active', 'pending'])
+        // Mengambil lelang yang aktif atau tertunda, memuat media utama, diurutkan dari tenggat waktu terdekat
+        $auctions = Auction::with(['media' => function($query) {
+                                $query->orderBy('sort_order', 'asc');
+                           }])
+                           ->whereIn('status', ['active', 'pending'])
                            ->orderBy('end_time', 'asc')
                            ->paginate(12);
 
@@ -22,8 +26,6 @@ class AuctionController extends Controller
     // 2. Create (Terlindungi): Membuat lelang baru
     public function store(Request $request)
     {
-        // Memundurkan komparasi waktu 'now' sebanyak 60 menit
-        // untuk mengakomodasi perbedaan detik/menit antara frontend dan backend
         $toleranceTime = Carbon::now()->subMinutes(60)->toDateTimeString();
 
         $validated = $request->validate([
@@ -32,33 +34,58 @@ class AuctionController extends Controller
             'starting_price' => 'required|numeric|min:0',
             'start_time' => 'required|date|after_or_equal:' . $toleranceTime,
             'end_time' => 'required|date|after:start_time',
+            'images' => 'sometimes|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // Maksimal 5MB per gambar
         ]);
 
-        // Menentukan status awal berdasarkan waktu mulai lelang
         $status = now()->gte($validated['start_time']) ? 'active' : 'pending';
 
         $auction = $request->user()->auctions()->create([
             'title' => $validated['title'],
             'description' => $validated['description'],
             'starting_price' => $validated['starting_price'],
-            'current_price' => $validated['starting_price'], // Harga saat ini dimulai dari harga awal
+            'current_price' => $validated['starting_price'],
             'start_time' => $validated['start_time'],
             'end_time' => $validated['end_time'],
             'status' => $status,
         ]);
 
+        // Proses penyimpanan multi-gambar
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $index => $file) {
+                // Simpan ke storage/app/public/auctions
+                $path = $file->store('auctions', 'public');
+
+                // Daftarkan ke tabel auction_media
+                $auction->media()->create([
+                    'file_path' => $path,
+                    'is_primary' => $index === 0 ? true : false, // Gambar pertama otomatis jadi thumbnail
+                    'sort_order' => $index,
+                ]);
+            }
+        }
+
+        // Muat ulang relasi media untuk dikembalikan di response
+        $auction->load('media');
+
         return response()->json([
-            'message' => 'Lelang berhasil dibuat',
+            'message' => 'Lelang dan aset visual berhasil dibuat',
             'auction' => $auction
         ], 201);
     }
 
-    // 3. Read Single (Publik): Menampilkan detail satu lelang beserta riwayat bid
+    // 3. Read Single (Publik): Menampilkan detail satu lelang beserta riwayat bid dan galeri
     public function show($id)
     {
-        $auction = Auction::with(['bids' => function($query) {
-            $query->orderBy('bid_amount', 'desc');
-        }, 'bids.user'])->findOrFail($id);
+        $auction = Auction::with([
+            'bids' => function($query) {
+                $query->orderBy('bid_amount', 'desc');
+            },
+            'bids.user',
+            'media' => function($query) {
+                $query->orderBy('sort_order', 'asc');
+            }
+        ])->findOrFail($id);
 
         return response()->json($auction);
     }
@@ -68,12 +95,10 @@ class AuctionController extends Controller
     {
         $auction = Auction::findOrFail($id);
 
-        // Validasi Otorisasi: Hanya pembuat lelang yang boleh mengubah
         if ($request->user()->id !== $auction->user_id) {
             return response()->json(['message' => 'Akses ditolak. Anda bukan pemilik lelang ini.'], 403);
         }
 
-        // Validasi Bisnis: Lelang tidak boleh diubah jika sudah ada penawaran
         if ($auction->bids()->exists()) {
             return response()->json(['message' => 'Lelang tidak dapat diubah karena sudah memiliki penawaran masuk.'], 400);
         }
@@ -88,7 +113,6 @@ class AuctionController extends Controller
 
         $auction->update($validated);
 
-        // Menyelaraskan current_price jika starting_price diubah (dan belum ada bid)
         if (isset($validated['starting_price'])) {
             $auction->update(['current_price' => $validated['starting_price']]);
         }
@@ -104,18 +128,21 @@ class AuctionController extends Controller
     {
         $auction = Auction::findOrFail($id);
 
-        // Validasi Otorisasi
         if ($request->user()->id !== $auction->user_id) {
             return response()->json(['message' => 'Akses ditolak.'], 403);
         }
 
-        // Validasi Bisnis
         if ($auction->bids()->exists()) {
             return response()->json(['message' => 'Lelang tidak dapat dihapus karena sudah memiliki penawaran masuk.'], 400);
         }
 
+        // Hapus fisik file gambar sebelum menghapus data dari database
+        foreach ($auction->media as $media) {
+            Storage::disk('public')->delete($media->file_path);
+        }
+
         $auction->delete();
 
-        return response()->json(['message' => 'Lelang berhasil dihapus']);
+        return response()->json(['message' => 'Lelang dan aset visual berhasil dihapus']);
     }
 }
