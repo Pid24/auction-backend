@@ -45,17 +45,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // 3. ZONA ADMINISTRATOR (Moderasi Sistem)
     // ==========================================
     Route::middleware('admin')->prefix('admin')->group(function () {
-
-        // Rute pengujian respons otorisasi Admin
+        // Status Pengecekan
         Route::get('/status', function () {
-            return response()->json([
-                'message' => 'Otorisasi Administrator Tervalidasi. Akses Sistem Terbuka.'
-            ], 200);
+            return response()->json(['message' => 'Otorisasi Administrator Tervalidasi. Akses Sistem Terbuka.'], 200);
         });
 
-        // Nanti kita akan tambahkan rute intervensi di sini, contoh:
-        // Route::delete('/auctions/{id}/force', [AdminController::class, 'forceDelete']);
-        // Route::post('/users/{id}/ban', [AdminController::class, 'banUser']);
+        // Kontrol Intervensi Data
+        Route::get('/auctions', [\App\Http\Controllers\AdminController::class, 'getSystemData']);
+        Route::delete('/auctions/{id}/force', [\App\Http\Controllers\AdminController::class, 'forceDeleteAuction']);
     });
 
 });
