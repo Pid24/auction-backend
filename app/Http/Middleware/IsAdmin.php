@@ -10,7 +10,7 @@ class IsAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!auth()->check() || auth()->user()->role !== 'admin') {
+        if (!$request->user() || $request->user()->role !== 'admin') {
             return response()->json([
                 'message' => 'Akses ditolak. Otorisasi level Administrator diperlukan.'
             ], 403);
