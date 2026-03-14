@@ -9,6 +9,7 @@ use App\Events\BidPlaced;
 use App\Events\Outbid;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class BidController extends Controller
 {
@@ -50,7 +51,6 @@ class BidController extends Controller
                     abort(400, 'Saldo dompet tidak mencukupi. Dana tersedia: Rp ' . number_format($availableBalance, 0, ',', '.') . '.');
                 }
 
-                // Identifikasi penawar tertinggi sebelumnya (SEBELUM bid baru disimpan)
                 $previousHighestBid = $auction->bids()->orderBy('bid_amount', 'desc')->first();
 
                 // 5. Eksekusi Tahan Dana (Hold) untuk Penawar Baru
@@ -86,9 +86,18 @@ class BidController extends Controller
                     'bid_amount' => $request->bid_amount,
                 ]);
 
-                // 8. Update harga tertinggi di tabel lelang
+                // 8. Protokol Anti-Sniping (Bid Extension)
+                $endTime = Carbon::parse($auction->end_time);
+                $secondsRemaining = $now->diffInSeconds($endTime, false);
+
+                if ($secondsRemaining > 0 && $secondsRemaining <= 180) {
+                    $auction->end_time = $now->copy()->addMinutes(3);
+                }
+
+                // 9. Update harga tertinggi (dan end_time jika diperpanjang) di tabel lelang
                 $auction->update([
                     'current_price' => $request->bid_amount,
+                    'end_time'      => $auction->end_time,
                 ]);
 
                 return [
@@ -113,11 +122,13 @@ class BidController extends Controller
             $result['bid']->load('user');
 
             // Trigger WebSocket Event 2: Update UI Room (Public Channel)
+            // Objek $auction di sini sudah membawa parameter end_time yang baru (jika terjadi ekstensi)
             broadcast(new BidPlaced($result['bid'], $result['auction']))->toOthers();
 
             return response()->json([
                 'message' => 'TRANSMISSION ACCEPTED. DANA DITAHAN.',
-                'bid' => $result['bid']
+                'bid' => $result['bid'],
+                'auction' => $result['auction'] // Kirim balik ke pembuat bid agar UI-nya juga terupdate
             ], 201);
 
         } catch (\Exception $e) {
