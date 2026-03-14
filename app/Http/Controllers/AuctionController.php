@@ -21,9 +21,18 @@ class AuctionController extends Controller
         ])->whereIn('status', ['active', 'pending']);
 
         // Logika Filter Kategori berdasarkan slug
-        if ($request->has('category')) {
+        if ($request->has('category') && !empty($request->category)) {
             $query->whereHas('category', function ($q) use ($request) {
                 $q->where('slug', $request->category);
+            });
+        }
+
+        // Logika Filter Pencarian Global Berbasis Teks (Global Search)
+        if ($request->has('search') && !empty($request->search)) {
+            $searchTerm = '%' . $request->search . '%';
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('title', 'like', $searchTerm)
+                  ->orWhere('description', 'like', $searchTerm);
             });
         }
 
