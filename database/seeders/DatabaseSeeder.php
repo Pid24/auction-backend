@@ -10,7 +10,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Pembuatan Entitas Administrator
         $admin = User::create([
             'name' => 'System Administrator',
             'email' => 'admin@system.com',
@@ -18,13 +17,11 @@ class DatabaseSeeder extends Seeder
             'role' => 'admin',
         ]);
 
-        // Injeksi Wallet Administrator (Saldo tidak terbatas untuk moderasi/testing)
         $admin->wallet()->create([
             'balance' => 999999999,
             'frozen_balance' => 0,
         ]);
 
-        // Pembuatan Entitas Pengguna Standar
         $operative = User::create([
             'name' => 'Standard Operative',
             'email' => 'user@system.com',
@@ -32,10 +29,22 @@ class DatabaseSeeder extends Seeder
             'role' => 'user',
         ]);
 
-        // Injeksi Wallet Pengguna (Saldo Rp 5.000.000 untuk pengujian bid)
         $operative->wallet()->create([
             'balance' => 5000000,
             'frozen_balance' => 0,
         ]);
+
+        $categories = [
+            ['name' => 'Automotive', 'slug' => 'automotive'],
+            ['name' => 'Real Estate', 'slug' => 'real-estate'],
+            ['name' => 'Electronics', 'slug' => 'electronics'],
+            ['name' => 'Collectibles & Art', 'slug' => 'collectibles-art'],
+            ['name' => 'Fashion & Jewelry', 'slug' => 'fashion-jewelry'],
+            ['name' => 'Miscellaneous', 'slug' => 'miscellaneous'],
+        ];
+
+        foreach ($categories as $category) {
+            \App\Models\Category::create($category);
+        }
     }
 }

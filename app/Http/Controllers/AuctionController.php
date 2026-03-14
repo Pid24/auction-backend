@@ -10,15 +10,25 @@ use Illuminate\Support\Facades\Storage;
 class AuctionController extends Controller
 {
     // 1. Read All (Publik): Menampilkan daftar lelang
-    public function index()
+    public function index(Request $request)
     {
-        // Mengambil lelang yang aktif atau tertunda, memuat media utama, diurutkan dari tenggat waktu terdekat
-        $auctions = Auction::with(['media' => function($query) {
-                                $query->orderBy('sort_order', 'asc');
-                           }])
-                           ->whereIn('status', ['active', 'pending'])
-                           ->orderBy('end_time', 'asc')
-                           ->paginate(12);
+        // Memuat relasi media dan kategori
+        $query = Auction::with([
+            'media' => function($query) {
+                $query->orderBy('sort_order', 'asc');
+            },
+            'category'
+        ])->whereIn('status', ['active', 'pending']);
+
+        // Logika Filter Kategori berdasarkan slug
+        if ($request->has('category')) {
+            $query->whereHas('category', function ($q) use ($request) {
+                $q->where('slug', $request->category);
+            });
+        }
+
+        // Diurutkan dari tenggat waktu terdekat
+        $auctions = $query->orderBy('end_time', 'asc')->paginate(12);
 
         return response()->json($auctions);
     }
@@ -30,6 +40,7 @@ class AuctionController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
+            'category_id' => 'required|exists:categories,id', // Validasi kategori
             'description' => 'required|string',
             'starting_price' => 'required|numeric|min:0',
             'start_time' => 'required|date|after_or_equal:' . $toleranceTime,
@@ -42,6 +53,7 @@ class AuctionController extends Controller
 
         $auction = $request->user()->auctions()->create([
             'title' => $validated['title'],
+            'category_id' => $validated['category_id'], // Injeksi kategori saat create
             'description' => $validated['description'],
             'starting_price' => $validated['starting_price'],
             'current_price' => $validated['starting_price'],
@@ -65,19 +77,20 @@ class AuctionController extends Controller
             }
         }
 
-        // Muat ulang relasi media untuk dikembalikan di response
-        $auction->load('media');
+        // Muat ulang relasi media dan kategori untuk dikembalikan di response
+        $auction->load(['media', 'category']);
 
         return response()->json([
-            'message' => 'Lelang dan aset visual berhasil dibuat',
+            'message' => 'Lelang berhasil dibuat',
             'auction' => $auction
         ], 201);
     }
 
-    // 3. Read Single (Publik): Menampilkan detail satu lelang beserta riwayat bid dan galeri
+    // 3. Read Single (Publik): Menampilkan detail satu lelang beserta riwayat bid, kategori, dan galeri
     public function show($id)
     {
         $auction = Auction::with([
+            'category', // Memuat detail kategori
             'bids' => function($query) {
                 $query->orderBy('bid_amount', 'desc');
             },
@@ -105,6 +118,7 @@ class AuctionController extends Controller
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
+            'category_id' => 'sometimes|exists:categories,id', // Validasi update kategori
             'description' => 'sometimes|string',
             'starting_price' => 'sometimes|numeric|min:0',
             'start_time' => 'sometimes|date',
@@ -143,6 +157,6 @@ class AuctionController extends Controller
 
         $auction->delete();
 
-        return response()->json(['message' => 'Lelang dan aset visual berhasil dihapus']);
+        return response()->json(['message' => 'Lelang berhasil dihapus']);
     }
 }

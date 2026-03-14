@@ -126,7 +126,7 @@ class BidController extends Controller
             broadcast(new BidPlaced($result['bid'], $result['auction']))->toOthers();
 
             return response()->json([
-                'message' => 'TRANSMISSION ACCEPTED. DANA DITAHAN.',
+                'message' => 'Bid berhasil diajukan dan dana telah ditahan.',
                 'bid' => $result['bid'],
                 'auction' => $result['auction'] // Kirim balik ke pembuat bid agar UI-nya juga terupdate
             ], 201);

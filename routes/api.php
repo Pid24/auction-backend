@@ -8,6 +8,7 @@ use App\Http\Controllers\AuctionController;
 use App\Http\Controllers\BidController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WalletController;
+use App\Http\Controllers\CategoryController;
 
 // Paksa rute broadcasting untuk menggunakan prefix /api dan middleware sanctum
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
@@ -20,6 +21,8 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/auctions', [AuctionController::class, 'index']);
 Route::get('/auctions/{id}', [AuctionController::class, 'show']);
+
+Route::get('/categories', [CategoryController::class, 'index']);
 
 // ==========================================
 // 2. ZONA TERLINDUNGI (Wajib Bearer Token)

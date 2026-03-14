@@ -10,7 +10,7 @@ class Auction extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 'title', 'description', 'starting_price',
+        'user_id', 'category_id', 'title', 'description', 'starting_price',
         'current_price', 'start_time', 'end_time', 'status'
     ];
 
@@ -32,5 +32,10 @@ class Auction extends Model
     public function media()
     {
         return $this->hasMany(AuctionMedia::class);
+    }
+
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
     }
 }
