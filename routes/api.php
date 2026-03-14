@@ -28,7 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- Autentikasi & Profil Global ---
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        return $request->user()->load('wallet');
     });
     Route::get('/profile', [ProfileController::class, 'index']);
 

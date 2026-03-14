@@ -8,5 +8,4 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Registrasi Cron Job untuk update status dan penentuan pemenang lelang
-Schedule::command('auctions:update-status')->everyMinute();
+Schedule::command('auctions:close')->everyMinute();

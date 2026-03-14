@@ -14,6 +14,11 @@ class Auction extends Model
         'current_price', 'start_time', 'end_time', 'status'
     ];
 
+    protected $casts = [
+        'start_time' => 'datetime',
+        'end_time' => 'datetime',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class);
