@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuctionController;
 use App\Http\Controllers\BidController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\WalletController;
 
 // Paksa rute broadcasting untuk menggunakan prefix /api dan middleware sanctum
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
@@ -31,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user()->load('wallet');
     });
     Route::get('/profile', [ProfileController::class, 'index']);
+    Route::post('/wallet/deposit', [WalletController::class, 'deposit']);
 
     // --- Operasi Standar (Operative) ---
     // Membuat dan memanipulasi lelang milik sendiri
