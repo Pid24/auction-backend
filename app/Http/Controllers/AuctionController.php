@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Auction;
+use App\Jobs\CloseAuctionJob; // INJEKSI KELAS JOB
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -12,7 +13,6 @@ class AuctionController extends Controller
     // 1. Read All (Publik): Menampilkan daftar lelang
     public function index(Request $request)
     {
-        // Memuat relasi media dan kategori
         $query = Auction::with([
             'media' => function($query) {
                 $query->orderBy('sort_order', 'asc');
@@ -20,14 +20,12 @@ class AuctionController extends Controller
             'category'
         ])->whereIn('status', ['active', 'pending']);
 
-        // Logika Filter Kategori berdasarkan slug
         if ($request->has('category') && !empty($request->category)) {
             $query->whereHas('category', function ($q) use ($request) {
                 $q->where('slug', $request->category);
             });
         }
 
-        // Logika Filter Pencarian Global Berbasis Teks (Global Search)
         if ($request->has('search') && !empty($request->search)) {
             $searchTerm = '%' . $request->search . '%';
             $query->where(function($q) use ($searchTerm) {
@@ -36,7 +34,6 @@ class AuctionController extends Controller
             });
         }
 
-        // Diurutkan dari tenggat waktu terdekat
         $auctions = $query->orderBy('end_time', 'asc')->paginate(12);
 
         return response()->json($auctions);
@@ -49,20 +46,20 @@ class AuctionController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'category_id' => 'required|exists:categories,id', // Validasi kategori
+            'category_id' => 'required|exists:categories,id',
             'description' => 'required|string',
             'starting_price' => 'required|numeric|min:0',
             'start_time' => 'required|date|after_or_equal:' . $toleranceTime,
             'end_time' => 'required|date|after:start_time',
             'images' => 'sometimes|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // Maksimal 5MB per gambar
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
         $status = now()->gte($validated['start_time']) ? 'active' : 'pending';
 
         $auction = $request->user()->auctions()->create([
             'title' => $validated['title'],
-            'category_id' => $validated['category_id'], // Injeksi kategori saat create
+            'category_id' => $validated['category_id'],
             'description' => $validated['description'],
             'starting_price' => $validated['starting_price'],
             'current_price' => $validated['starting_price'],
@@ -71,22 +68,21 @@ class AuctionController extends Controller
             'status' => $status,
         ]);
 
-        // Proses penyimpanan multi-gambar
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $file) {
-                // Simpan ke storage/app/public/auctions
                 $path = $file->store('auctions', 'public');
-
-                // Daftarkan ke tabel auction_media
                 $auction->media()->create([
                     'file_path' => $path,
-                    'is_primary' => $index === 0 ? true : false, // Gambar pertama otomatis jadi thumbnail
+                    'is_primary' => $index === 0 ? true : false,
                     'sort_order' => $index,
                 ]);
             }
         }
 
-        // Muat ulang relasi media dan kategori untuk dikembalikan di response
+        // INJEKSI ANTRETAN TUGAS (JOB QUEUE)
+        // Mendorong tugas penutupan lelang dengan delay sesuai end_time
+        CloseAuctionJob::dispatch($auction)->delay(Carbon::parse($auction->end_time));
+
         $auction->load(['media', 'category']);
 
         return response()->json([
@@ -99,7 +95,7 @@ class AuctionController extends Controller
     public function show($id)
     {
         $auction = Auction::with([
-            'category', // Memuat detail kategori
+            'category',
             'bids' => function($query) {
                 $query->orderBy('bid_amount', 'desc');
             },
@@ -127,7 +123,7 @@ class AuctionController extends Controller
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
-            'category_id' => 'sometimes|exists:categories,id', // Validasi update kategori
+            'category_id' => 'sometimes|exists:categories,id',
             'description' => 'sometimes|string',
             'starting_price' => 'sometimes|numeric|min:0',
             'start_time' => 'sometimes|date',
@@ -138,6 +134,12 @@ class AuctionController extends Controller
 
         if (isset($validated['starting_price'])) {
             $auction->update(['current_price' => $validated['starting_price']]);
+        }
+
+        // INJEKSI ANTRETAN TUGAS (RE-DISPATCH)
+        // Jika end_time diubah, kirim ulang job penutupan lelang dengan jadwal baru
+        if (isset($validated['end_time'])) {
+            CloseAuctionJob::dispatch($auction)->delay(Carbon::parse($validated['end_time']));
         }
 
         return response()->json([
@@ -159,7 +161,6 @@ class AuctionController extends Controller
             return response()->json(['message' => 'Lelang tidak dapat dihapus karena sudah memiliki penawaran masuk.'], 400);
         }
 
-        // Hapus fisik file gambar sebelum menghapus data dari database
         foreach ($auction->media as $media) {
             Storage::disk('public')->delete($media->file_path);
         }

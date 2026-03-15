@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Auction;
 use App\Models\Bid;
 use App\Models\Wallet;
+use App\Jobs\CloseAuctionJob;
 use App\Events\BidPlaced;
 use App\Events\Outbid;
 use Illuminate\Http\Request;
@@ -89,9 +90,11 @@ class BidController extends Controller
                 // 8. Protokol Anti-Sniping (Bid Extension)
                 $endTime = Carbon::parse($auction->end_time);
                 $secondsRemaining = $now->diffInSeconds($endTime, false);
+                $isExtended = false; // Penanda ekstensi waktu
 
                 if ($secondsRemaining > 0 && $secondsRemaining <= 180) {
                     $auction->end_time = $now->copy()->addMinutes(3);
+                    $isExtended = true;
                 }
 
                 // 9. Update harga tertinggi (dan end_time jika diperpanjang) di tabel lelang
@@ -103,9 +106,16 @@ class BidController extends Controller
                 return [
                     'bid' => $bid,
                     'auction' => $auction,
-                    'previousHighestBid' => $previousHighestBid
+                    'previousHighestBid' => $previousHighestBid,
+                    'isExtended' => $isExtended // Lempar nilai penanda ke luar transaksi
                 ];
             });
+
+            // INJEKSI RE-DISPATCH JOB QUEUE
+            // Jika Anti-Sniping terpicu, lempar job penutupan lelang baru ke Redis dengan jadwal yang sudah diperpanjang
+            if ($result['isExtended']) {
+                CloseAuctionJob::dispatch($result['auction'])->delay(Carbon::parse($result['auction']->end_time));
+            }
 
             // Trigger WebSocket Event 1: Notifikasi Outbid (Private Channel)
             $previousHighestBid = $result['previousHighestBid'];

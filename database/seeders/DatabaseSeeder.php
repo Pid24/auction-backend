@@ -46,5 +46,11 @@ class DatabaseSeeder extends Seeder
         foreach ($categories as $category) {
             \App\Models\Category::create($category);
         }
+
+        // Cetak 1.000 lelang dummy
+        // \App\Models\Auction::factory()->count(1000)->create()->each(function ($auction) {
+        //     // Langsung lempar 1.000 Job ini ke antrean Redis saat data dicetak
+        //     \App\Jobs\CloseAuctionJob::dispatch($auction)->delay($auction->end_time);
+        // });
     }
 }
